@@ -1,14 +1,11 @@
-import { NextResponse } from "next/server";
-import {
-  BedrockRuntimeClient,
-  InvokeModelCommand,
-} from "@aws-sdk/client-bedrock-runtime";
+import { NextResponse } from 'next/server';
+import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime';
 
 // Create a Bedrock Runtime client in the AWS Region of your choice.
-const client = new BedrockRuntimeClient({ region: "us-east-1" });
+const client = new BedrockRuntimeClient({ region: 'us-east-1' });
 
 // Set the model ID, e.g., Llama 3 8B Instruct.
-const modelId = "meta.llama3-8b-instruct-v1:0";
+const modelId = 'meta.llama3-8b-instruct-v1:0';
 
 // Define the system prompt for the Uber driver chatbot.
 const systemPrompt = `
@@ -28,45 +25,56 @@ Now, please tell me how I can assist you today.
 `;
 
 export async function POST(req) {
-  const userMessage = await req.json();
-  console.log(userMessage.user);
+  try {
+    const userMessage = await req.json();
 
-  // Embed the system prompt and user message in Llama 3's prompt format.
-  const prompt = `
-    system
-    ${systemPrompt}
-    
-    user
-    ${userMessage.user}
-    
-    assistant
-  `;
+    // Embed the system prompt and user message in Llama 3's prompt format.
+    const prompt = `
+      system
+      ${systemPrompt}
+      
+      user
+      ${userMessage.user}
+      
+      assistant
+    `;
 
-  // Format the request payload using the model's native structure.
-  const request = {
-    prompt,
-    // Optional inference parameters:
-    max_gen_len: 512,
-    temperature: 0.5,
-    top_p: 0.9,
-  };
+    // Format the request payload using the model's native structure.
+    const request = {
+      prompt,
+      max_gen_len: 512,
+      temperature: 0.5,
+      top_p: 0.9,
+    };
 
-  // Encode and send the request.
-  const response = await client.send(
-    new InvokeModelCommand({
-      contentType: "application/json",
-      body: JSON.stringify(request),
-      modelId,
-    })
-  );
+    // Encode and send the request.
+    const response = await client.send(
+        new InvokeModelCommand({
+          contentType: 'application/json',
+          body: JSON.stringify(request),
+          modelId,
+        })
+    );
 
-  // Decode the native response body.
-  /** @type {{ generation: string }} */
-  const nativeResponse = JSON.parse(new TextDecoder().decode(response.body));
+    // This decodes the native response body.
+    const decodedResponse = new TextDecoder().decode(response.body);
+    console.log('Raw Response:', decodedResponse);
 
-  // Extract and print the generated text.
-  const responseText = nativeResponse.generation;
-  console.log(responseText);
+    let nativeResponse;
+    try {
+      nativeResponse = JSON.parse(decodedResponse);
+    } catch (err) {
+      console.error('Error parsing JSON:', err);
+      return NextResponse.json({ error: 'Failed to parse response from Bedrock.' });
+    }
 
-  return NextResponse.json({ message: responseText });
+    // Extract the generated text.
+    const responseText = nativeResponse.generation;
+    console.log('Assistant Response:', responseText);
+
+    return NextResponse.json({ message: responseText });
+  } catch (error) {
+    console.error('Error in POST handler:', error);
+    return NextResponse.json({ error: 'An error occurred while processing your request.' });
+  }
 }
